@@ -37,4 +37,8 @@ def create_app(test_config=None):
     def index():
         return redirect(url_for("main.dashboard"))
 
+    @app.get("/health")
+    def health():
+        return {"status": "ok"}, 200
+
     return app

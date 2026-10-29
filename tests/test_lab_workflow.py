@@ -201,6 +201,12 @@ def test_unauthenticated_password_page_explains_login_requirement(app):
     assert 'name="username"' in response.get_data(as_text=True)
 
 
+def test_health_endpoint_is_public_and_returns_ok(app):
+    response = app.test_client().get("/health")
+    assert response.status_code == 200
+    assert response.get_json() == {"status": "ok"}
+
+
 def test_routes_require_auth_and_restrict_result_approval(app, actors):
     client = app.test_client()
     store = app.extensions["json_store"]

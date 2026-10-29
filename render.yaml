@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: absher-clinic
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT run:app
+    healthCheckPath: /health
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: DATA_FILE
+        value: /var/data/store.json
+    disk:
+      name: absher-data
+      mountPath: /var/data
+      sizeGB: 1
