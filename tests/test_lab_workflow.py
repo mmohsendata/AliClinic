@@ -1,8 +1,8 @@
 import pytest
 from filelock import FileLock
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
-from app import create_app
+from app import bootstrap_admin, create_app
 from app.services.lab import (
     LabError,
     approve_order,
@@ -206,6 +206,74 @@ def test_health_endpoint_is_public_and_returns_ok(app):
     response = app.test_client().get("/health")
     assert response.status_code == 200
     assert response.get_json() == {"status": "ok"}
+
+
+def test_bootstrap_admin_creates_hashed_temporary_admin_and_requires_password_change(app, monkeypatch):
+    store = app.extensions["json_store"]
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_USERNAME", "admin")
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_PASSWORD", "a-unique-temporary-password")
+    bootstrap_admin(store)
+
+    user = store.read()["users"][0]
+    assert user["username"] == "admin"
+    assert user["role"] == "admin"
+    assert user["active"] is True
+    assert user["must_change_password"] is True
+    assert check_password_hash(user["password_hash"], "a-unique-temporary-password")
+
+
+def test_app_startup_bootstraps_admin_from_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_USERNAME", "admin")
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_PASSWORD", "a-unique-temporary-password")
+
+    application = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "test-key-not-for-production",
+            "DATA_FILE": str(tmp_path / "store.json"),
+            "WTF_CSRF_ENABLED": False,
+        }
+    )
+
+    users = application.extensions["json_store"].read()["users"]
+    assert len(users) == 1
+    assert users[0]["username"] == "admin"
+    assert users[0]["must_change_password"] is True
+
+
+def test_bootstrap_admin_never_overwrites_an_existing_active_admin(app, monkeypatch):
+    store = app.extensions["json_store"]
+    original = {
+        "id": "existing-admin",
+        "username": "existing",
+        "password_hash": generate_password_hash("existing-password"),
+        "role": "admin",
+        "active": True,
+        "must_change_password": False,
+    }
+    store.update(lambda data: data["users"].append(original.copy()))
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_USERNAME", "admin")
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_PASSWORD", "a-unique-temporary-password")
+
+    bootstrap_admin(store)
+
+    assert store.read()["users"] == [original]
+
+
+def test_bootstrap_admin_rejects_weak_password(app, monkeypatch):
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_USERNAME", "admin")
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_PASSWORD", "admin")
+
+    with pytest.raises(RuntimeError, match="at least 16"):
+        bootstrap_admin(app.extensions["json_store"])
+
+
+def test_bootstrap_admin_requires_both_environment_variables(app, monkeypatch):
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_USERNAME", "admin")
+    monkeypatch.delenv("BOOTSTRAP_ADMIN_PASSWORD", raising=False)
+
+    with pytest.raises(RuntimeError, match="Set both"):
+        bootstrap_admin(app.extensions["json_store"])
 
 
 def test_json_store_creates_a_fresh_lock_for_each_operation(app, monkeypatch):
