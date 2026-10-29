@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}إدارة المستخدمين{% endblock %}
+{% block breadcrumb %}المستخدمون{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">حسابات النظام</p><h1>إدارة المستخدمين</h1><p class="muted">أنشئ حساباً بدور محدد؛ تُفرض الصلاحيات على الخادم.</p></div></div>
+<div class="content-grid two-col">
+  <section class="panel"><div class="panel-heading"><div><p class="eyebrow">حساب جديد</p><h2>إضافة مستخدم</h2></div></div>
+    <form method="post" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="span-two">اسم المستخدم<input name="username" maxlength="80" autocomplete="off" required></label>
+      <label>الدور<select name="role" required>{% for role in assignable_roles %}<option value="{{ role }}">{{ role_labels[role] }}</option>{% endfor %}</select></label>
+      <span></span>
+      <label>كلمة المرور الأولية<input type="password" name="password" minlength="12" autocomplete="new-password" required></label>
+      <label>تأكيد كلمة المرور<input type="password" name="confirm_password" minlength="12" autocomplete="new-password" required></label>
+      <p class="muted span-two">يجب تغيير كلمة المرور عند تسجيل الدخول الأول.</p>
+      <button class="button primary span-two" type="submit">إنشاء الحساب <span>←</span></button>
+    </form>
+  </section>
+  <section class="panel"><div class="panel-heading"><div><p class="eyebrow">الوصول</p><h2>الحسابات <span class="count">{{ users|length }}</span></h2></div></div>
+    <div class="record-list">{% for account in users %}<article class="record-row"><div class="patient-avatar">{{ account.username[:1] }}</div><div class="record-main"><b>{{ account.username }}</b><small>{{ role_labels.get(account.role, account.role) }}</small></div><span class="badge {% if account.active %}badge-green{% endif %}">{{ "نشط" if account.active else "معطل" }}</span></article>{% endfor %}</div>
+  </section>
+</div>
+<div class="notice">تعيين الأدوار هنا يعتمد مجموعات ثابتة في التطبيق؛ لا تتوفر بعد مصفوفة أذونات مخصصة أو صلاحيات حسب الفرع.</div>
+{% endblock %}

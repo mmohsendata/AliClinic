@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b746b">
+  <title>{% block title %}Absher{% endblock %} | Absher</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+{% if user %}
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="{{ url_for('main.dashboard') }}"><span class="brand-mark">A</span><span><b>Absher</b><small>إدارة المختبر</small></span></a>
+      <div class="nav-caption">القائمة الرئيسية</div>
+      <nav class="nav-links" aria-label="القائمة الرئيسية">
+        <a href="{{ url_for('main.dashboard') }}" class="{% if request.endpoint == 'main.dashboard' %}active{% endif %}"><span>◫</span> لوحة التحكم</a>
+        <a href="{{ url_for('main.patients') }}" class="{% if request.endpoint == 'main.patients' %}active{% endif %}"><span>♙</span> المرضى</a>
+        <a href="{{ url_for('main.catalog') }}" class="{% if request.endpoint == 'main.catalog' %}active{% endif %}"><span>⌕</span> كتالوج التحاليل</a>
+        <a href="{{ url_for('main.orders') }}" class="{% if request.endpoint == 'main.orders' %}active{% endif %}"><span>▤</span> طلبات المختبر</a>
+        {% if user.role == 'admin' %}<a href="{{ url_for('main.users') }}" class="{% if request.endpoint == 'main.users' %}active{% endif %}"><span>♧</span> المستخدمون</a>{% endif %}
+      </nav>
+      <div class="sidebar-bottom"><span class="status-dot"></span><span>النظام يعمل محلياً</span></div>
+    </aside>
+    <main class="main-area">
+      <header class="topbar">
+        <button class="menu-toggle" id="menuToggle" aria-label="فتح القائمة">☰</button>
+        <div class="breadcrumbs">المختبر <span>/</span> {% block breadcrumb %}نظرة عامة{% endblock %}</div>
+        <div class="user-menu"><span class="avatar">{{ user.username[:1] }}</span><span><b>{{ user.username }}</b><small>{{ role_labels.get(user.role, user.role) }}</small></span><form method="post" action="{{ url_for('main.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="logout" type="submit">خروج</button></form></div>
+      </header>
+      <section class="page-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}<div class="flash-stack">{% for category, message in messages %}<div class="flash {{ category }}" role="status">{{ message }}</div>{% endfor %}</div>{% endif %}
+        {% endwith %}
+        {% if demo_mode %}<div class="notice demo-notice"><b>وضع العرض:</b> السجلات الظاهرة تجريبية بالكامل وغير صالحة للاستخدام الطبي. أضف سجلاتك الفعلية للبدء.</div>{% endif %}
+        {% block content %}{% endblock %}
+      </section>
+    </main>
+  </div>
+{% else %}
+  <main class="auth-shell">{% block auth_content %}{% endblock %}</main>
+{% endif %}
+<script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
+</html>

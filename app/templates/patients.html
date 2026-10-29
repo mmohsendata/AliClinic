@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}إدارة المرضى{% endblock %}
+{% block breadcrumb %}المرضى{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">قاعدة بيانات المرضى</p><h1>إدارة المرضى</h1><p class="muted">أنشئ ملفات المرضى وابحث في السجلات المسجلة.</p></div></div>
+<div class="content-grid two-col">
+  <section class="panel"><div class="panel-heading"><div><p class="eyebrow">ملف جديد</p><h2>تسجيل مريض</h2></div><span class="subtle-icon">＋</span></div>
+    <form method="post" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="span-two">الاسم الكامل <span class="required">*</span><input name="name" required maxlength="160" placeholder="الاسم باللغة العربية"></label>
+      <label>رقم الهاتف <span class="required">*</span><input name="phone" required maxlength="30" inputmode="tel" placeholder="01xxxxxxxxx"></label>
+      <label>الاسم بالإنجليزية<input name="english_name" maxlength="160"></label>
+      <label>النوع<select name="gender"><option>غير محدد</option><option>ذكر</option><option>أنثى</option></select></label>
+      <label>تاريخ الميلاد<input type="date" name="date_of_birth"></label>
+      <label class="span-two">الرقم القومي<input name="national_id" maxlength="40"></label>
+      <button class="button primary span-two" type="submit">حفظ ملف المريض <span>←</span></button>
+    </form>
+  </section>
+  <section class="panel"><div class="panel-heading"><div><p class="eyebrow">السجلات</p><h2>المرضى المسجلون <span class="count">{{ patients|length }}</span></h2></div></div>
+    <form method="get" class="search-form"><input name="q" value="{{ request.args.get('q','') }}" placeholder="ابحث بالاسم أو الهاتف أو رقم الملف" aria-label="بحث"><button class="button secondary" type="submit">بحث</button></form>
+    {% if patients %}<div class="record-list">{% for patient in patients %}<article class="record-row"><div class="patient-avatar">{{ patient.name[:1] }}</div><div class="record-main"><b>{{ patient.name }}</b><small>{{ patient.medical_record_number }} · {{ patient.phone }}</small></div>{% if patient.is_demo %}<span class="badge demo-badge">تجريبي</span>{% endif %}<span class="tag">{{ patient.gender }}</span></article>{% endfor %}</div>
+    {% else %}<div class="empty-state compact"><div class="empty-icon">♙</div><h3>لا توجد نتائج</h3><p>ستظهر ملفات المرضى هنا بعد تسجيلها.</p></div>{% endif %}
+  </section>
+</div>
+{% endblock %}

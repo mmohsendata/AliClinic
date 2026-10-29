@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>تقرير {{ order.number }}</title><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}"></head>
+<body class="report-page">
+  <main class="report-sheet">
+    <header class="report-header"><div class="brand"><span class="brand-mark">A</span><span><b>Absher</b><small>إدارة المختبر</small></span></div><div class="report-label">تقرير نتائج مختبرية</div></header>
+    <h1>تقرير نتائج التحاليل</h1>
+    <div class="report-details"><div><span>المريض</span><b>{{ order.patient_name }}</b></div><div><span>رقم الطلب</span><b dir="ltr">{{ order.number }}</b></div><div><span>تاريخ الطلب</span><b dir="ltr">{{ order.created_at[:10] }}</b></div><div><span>حالة التقرير</span><b>معتمد</b></div></div>
+    <table><thead><tr><th>التحليل</th><th>النتيجة</th><th>الوحدة</th><th>النطاق المرجعي</th></tr></thead><tbody>
+      {% for item in order.test_items %}
+        {% set result = results|selectattr('test_id','equalto',item.test_id)|first %}
+        <tr><td>{{ item.name }}</td><td><b>{{ result.value if result else "—" }}</b></td><td>—</td><td>غير معتمد</td></tr>
+      {% endfor %}
+    </tbody></table>
+    {% if order.is_demo %}<p class="report-warning">هذا تقرير تجريبي ببيانات غير حقيقية، وغير صالح للتشخيص أو للاستخدام السريري.</p>{% endif %}
+    <p class="report-warning">القيم المرجعية والوحدات غير مُدخلة أو معتمدة في هذا الإصدار. يجب مراجعة التقرير واعتماد بيانات التحاليل من المختص قبل استخدامه سريرياً.</p>
+    <footer class="report-footer"><span>تم إنشاء التقرير من النظام — {{ order.approved_at[:10] }}</span><span>رقم الإصدار: 1</span></footer>
+    <button class="button primary no-print" onclick="window.print()">طباعة التقرير</button>
+  </main>
+</body>
+</html>

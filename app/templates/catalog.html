@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}كتالوج التحاليل{% endblock %}
+{% block breadcrumb %}كتالوج التحاليل{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">الخدمات المخبرية</p><h1>كتالوج التحاليل</h1><p class="muted">إدارة أسماء التحاليل وأسعارها ونوع العينة.</p></div></div>
+<div class="content-grid two-col">
+  <section class="panel"><div class="panel-heading"><div><p class="eyebrow">إضافة خدمة</p><h2>تحليل جديد</h2></div></div>
+    <form method="post" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>اسم التحليل <span class="required">*</span><input name="name" required maxlength="120"></label>
+      <label>الرمز<input name="code" maxlength="24" dir="ltr"></label>
+      <label>السعر (ج.م) <span class="required">*</span><input name="price" type="number" step="0.01" min="0" required></label>
+      <label>نوع العينة<input name="sample_type" maxlength="80" placeholder="مثال: مصل الدم"></label>
+      <label class="span-two">الاسم بالإنجليزية<input name="english_name" maxlength="120"></label>
+      <button class="button primary span-two" type="submit">إضافة إلى الكتالوج <span>←</span></button>
+    </form>
+  </section>
+  <section class="panel"><div class="panel-heading"><div><p class="eyebrow">الخدمات المتاحة</p><h2>التحاليل <span class="count">{{ tests|length }}</span></h2></div></div>
+    {% if tests %}<div class="table-wrap"><table><thead><tr><th>الرمز</th><th>التحليل</th><th>العينة</th><th>السعر</th></tr></thead><tbody>{% for test in tests %}<tr><td class="code">{{ test.code }}</td><td><b>{{ test.name }}</b>{% if test.is_demo %}<span class="badge demo-badge">تجريبي</span>{% endif %}{% if test.english_name %}<small class="block muted">{{ test.english_name }}</small>{% endif %}</td><td>{{ test.sample_type or "—" }}</td><td>{{ "%.2f"|format(test.price) }} ج.م</td></tr>{% endfor %}</tbody></table></div>
+    {% else %}<div class="empty-state compact"><div class="empty-icon">⌕</div><h3>الكتالوج فارغ</h3><p>أضف التحاليل وأسعارها للبدء في تسجيل الطلبات.</p></div>{% endif %}
+  </section>
+</div>
+{% endblock %}

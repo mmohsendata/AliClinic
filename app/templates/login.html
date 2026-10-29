@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}تسجيل الدخول{% endblock %}
+{% block auth_content %}
+<section class="auth-card">
+  <a class="brand auth-brand" href="#"><span class="brand-mark">A</span><span><b>Absher</b><small>إدارة المختبر</small></span></a>
+  <p class="eyebrow">مرحباً بعودتك</p><h1>تسجيل الدخول</h1>
+  <p class="muted">أدخل بيانات حسابك للوصول إلى مساحة العمل.</p>
+  {% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}<div class="flash {{ category }}" role="alert">{{ message }}</div>{% endfor %}{% endwith %}
+  <form method="post" class="form-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>اسم المستخدم<input name="username" autocomplete="username" required autofocus></label>
+    <label>كلمة المرور<input type="password" name="password" autocomplete="current-password" required></label>
+    <button class="button primary full" type="submit">دخول آمن <span>←</span></button>
+  </form>
+  <div class="security-note">بياناتك محفوظة محلياً داخل النظام.</div>
+</section>
+{% endblock %}

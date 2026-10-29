@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}طلبات المختبر{% endblock %}
+{% block breadcrumb %}طلبات المختبر{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">رحلة العينة والنتيجة</p><h1>طلبات المختبر</h1><p class="muted">إنشاء طلب، متابعة العينات، إدخال النتائج ثم مراجعتها واعتمادها.</p></div></div>
+<section class="panel order-create">
+  <div class="panel-heading"><div><p class="eyebrow">طلب جديد</p><h2>إنشاء طلب مختبر</h2></div><span class="subtle-icon">＋</span></div>
+  <form method="post" class="order-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>المريض<select name="patient_id" required><option value="">اختر المريض</option>{% for patient in patients %}<option value="{{ patient.id }}">{{ patient.name }} · {{ patient.medical_record_number }}</option>{% endfor %}</select></label>
+    <fieldset><legend>التحاليل المطلوبة <span class="required">*</span></legend><div class="test-select-grid">{% for test in tests %}<label class="check-card"><input type="checkbox" name="test_ids" value="{{ test.id }}"><span><b>{{ test.name }}</b><small>{{ "%.2f"|format(test.price) }} ج.م</small></span></label>{% else %}<p class="muted">أضف تحاليل نشطة من الكتالوج أولاً.</p>{% endfor %}</div></fieldset>
+    <button class="button primary" type="submit">إنشاء الطلب والعينات <span>←</span></button>
+  </form>
+</section>
+<section class="panel orders-panel"><div class="panel-heading"><div><p class="eyebrow">سير العمل</p><h2>الطلبات <span class="count">{{ orders|length }}</span></h2></div></div>
+  {% if orders %}
+  <div class="order-list">{% for order in orders %}
+  <article class="order-card">
+    <div class="order-top"><div><span class="code">{{ order.number }}</span>{% if order.is_demo %}<span class="badge demo-badge">تجريبي</span>{% endif %}<h3>{{ order.patient_name }}</h3><small>{{ order.created_at[:16].replace('T',' ') }} UTC</small></div><span class="badge {% if order.status == 'معتمد' %}badge-green{% endif %}">{{ order.status }}</span></div>
+    <div class="order-meta"><span>التحاليل: {{ order.test_items|length }}</span><span>الإجمالي: {{ "%.2f"|format(order.total) }} ج.م</span></div>
+    <div class="order-tests">{% for item in order.test_items %}
+      {% set sample = samples|selectattr('order_id','equalto',order.id)|selectattr('test_id','equalto',item.test_id)|first %}
+      {% set result = results|selectattr('order_id','equalto',order.id)|selectattr('test_id','equalto',item.test_id)|first %}
+      <div class="test-workflow">
+        <div><b>{{ item.name }}</b><small>العينة {{ sample.identifier if sample else '—' }} · {{ sample.status if sample else '—' }}</small></div>
+        {% if order.status not in ['معتمد','مكتمل','ملغي'] %}
+        <form method="post" action="{{ url_for('main.sample_status', sample_id=sample.id) }}" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <select name="status" aria-label="حالة العينة لـ {{ item.name }}"><option value="تم السحب">تم السحب</option><option value="مستلمة">مستلمة</option><option value="مرفوضة">مرفوضة</option><option value="قيد المعالجة">قيد المعالجة</option></select>
+          <input name="reason" placeholder="سبب الرفض / إعادة السحب" aria-label="سبب رفض العينة أو إعادة سحبها">
+          <button class="button tiny secondary" type="submit">تحديث</button>
+        </form>
+        {% endif %}
+        <div class="result-value">{% if result %}<span>النتيجة: <b>{{ result.value }}</b> · {{ result.status }}</span>{% else %}<span class="muted">لم تُدخل نتيجة</span>{% endif %}</div>
+        {% if user.role in ['admin','technician'] and order.status not in ['معتمد','مكتمل','ملغي'] %}
+        <form method="post" action="{{ url_for('main.result_entry', order_id=order.id) }}" class="inline-form result-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="test_id" value="{{ item.test_id }}">
+          <input name="value" aria-label="نتيجة {{ item.name }}" placeholder="أدخل النتيجة" value="{{ result.value if result else '' }}" required maxlength="300">
+          {% if result %}<input name="reason" aria-label="سبب تعديل النتيجة" placeholder="سبب التعديل (مطلوب)" required maxlength="300">{% endif %}
+          <button class="button tiny primary" type="submit">حفظ</button>
+        </form>{% endif %}
+      </div>
+    {% endfor %}</div>
+    {% if user.role in ['admin','reviewer'] and order.status == 'بانتظار المراجعة' %}
+      <form method="post" action="{{ url_for('main.result_approval', order_id=order.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button primary" type="submit">مراجعة واعتماد النتائج</button></form>
+    {% endif %}
+    {% if order.status in ['معتمد','مكتمل'] %}<a class="button secondary" href="{{ url_for('main.report', order_id=order.id) }}">عرض التقرير المعتمد</a>{% endif %}
+  </article>{% endfor %}</div>
+  {% else %}<div class="empty-state compact"><div class="empty-icon">▤</div><h3>لا توجد طلبات</h3><p>أنشئ طلباً لبدء متابعة العينات والنتائج.</p></div>{% endif %}
+</section>
+{% endblock %}

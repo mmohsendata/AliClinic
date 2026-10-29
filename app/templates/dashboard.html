@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}لوحة التحكم{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><p class="eyebrow">نظرة عامة على مساحة العمل</p><h1>مرحباً، {{ user.username }} <span class="wave">✦</span></h1><p class="muted">إليك ملخص نشاط المختبر المسجل في النظام.</p></div>
+  <a class="button primary" href="{{ url_for('main.orders') }}">＋ طلب تحليل جديد</a>
+</div>
+<div class="kpi-grid">
+  <article class="kpi-card"><div class="kpi-icon teal">♙</div><span class="kpi-label">إجمالي المرضى</span><strong>{{ patients }}</strong><small>ملف مريض مسجل</small></article>
+  <article class="kpi-card"><div class="kpi-icon blue">▤</div><span class="kpi-label">طلبات المختبر</span><strong>{{ orders }}</strong><small>إجمالي الطلبات المحفوظة</small></article>
+  <article class="kpi-card"><div class="kpi-icon amber">◷</div><span class="kpi-label">بانتظار المراجعة</span><strong>{{ pending }}</strong><small>طلب يحتاج اعتماد النتائج</small></article>
+  <article class="kpi-card"><div class="kpi-icon violet">⌕</div><span class="kpi-label">تحاليل نشطة</span><strong>{{ tests }}</strong><small>في كتالوج المختبر</small></article>
+</div>
+<div class="content-grid">
+  <section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">آخر التحديثات</p><h2>أحدث الطلبات</h2></div><a class="text-link" href="{{ url_for('main.orders') }}">عرض الكل ←</a></div>
+    {% if recent_orders %}
+    <div class="table-wrap"><table><thead><tr><th>رقم الطلب</th><th>المريض</th><th>الحالة</th><th>الإجمالي</th></tr></thead><tbody>
+      {% for order in recent_orders %}<tr><td class="code">{{ order.number }}</td><td>{{ order.patient_name }}</td><td><span class="badge">{{ order.status }}</span></td><td>{{ "%.2f"|format(order.total) }} ج.م</td></tr>{% endfor %}
+    </tbody></table></div>
+    {% else %}<div class="empty-state"><div class="empty-icon">▤</div><h3>لا توجد طلبات بعد</h3><p>ابدأ بإنشاء أول طلب مختبر للمريض.</p><a class="button secondary" href="{{ url_for('main.orders') }}">إنشاء طلب</a></div>{% endif %}
+  </section>
+  <section class="panel welcome-panel"><div class="welcome-art"><span>✦</span><i></i><b>ن</b></div><p class="eyebrow">مساحة عملك جاهزة</p><h2>رعاية تبدأ من نتيجة دقيقة</h2><p class="muted">أدر ملفات المرضى، التحاليل، والعينات من مكان واحد. الأرقام هنا مبنية على سجلاتك الفعلية.</p><div class="quick-links"><a href="{{ url_for('main.patients') }}">＋ تسجيل مريض</a><a href="{{ url_for('main.catalog') }}">إدارة التحاليل ←</a></div></section>
+</div>
+<div class="notice"><b>تنبيه سريري:</b> النطاقات المرجعية والتصنيفات الطبية غير معرّفة افتراضياً. راجعها واعتمدها مهنياً قبل استخدامها في التقارير.</div>
+{% endblock %}
