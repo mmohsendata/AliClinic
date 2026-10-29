@@ -1,4 +1,5 @@
 import pytest
+from filelock import FileLock
 from werkzeug.security import generate_password_hash
 
 from app import create_app
@@ -205,6 +206,25 @@ def test_health_endpoint_is_public_and_returns_ok(app):
     response = app.test_client().get("/health")
     assert response.status_code == 200
     assert response.get_json() == {"status": "ok"}
+
+
+def test_json_store_creates_a_fresh_lock_for_each_operation(app, monkeypatch):
+    store = app.extensions["json_store"]
+    locks = []
+    original_lock = FileLock
+
+    def recording_lock(*args, **kwargs):
+        lock = original_lock(*args, **kwargs)
+        locks.append(lock)
+        return lock
+
+    monkeypatch.setattr("app.repositories.json_store.FileLock", recording_lock)
+    store.read()
+    store.update(lambda data: data.update({"probe": True}))
+    store.read()
+
+    assert len(locks) == 3
+    assert len({id(lock) for lock in locks}) == 3
 
 
 def test_routes_require_auth_and_restrict_result_approval(app, actors):

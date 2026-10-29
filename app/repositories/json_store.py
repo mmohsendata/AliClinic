@@ -25,14 +25,16 @@ class JsonStore:
     def __init__(self, path: str):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.lock = FileLock(str(self.path) + ".lock", timeout=10)
+
+    def _lock(self) -> FileLock:
+        return FileLock(str(self.path) + ".lock", timeout=10)
 
     def read(self) -> dict[str, Any]:
-        with self.lock:
+        with self._lock():
             return self._read_unlocked()
 
     def update(self, operation):
-        with self.lock:
+        with self._lock():
             data = self._read_unlocked()
             result = operation(data)
             self.path.parent.mkdir(parents=True, exist_ok=True)
