@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}المخزون{% endblock %}
+{% block breadcrumb %}المخزون{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">المشتريات والاستهلاك</p><h1>المخزون</h1><p class="muted">تابع رصيد المستلزمات وسجّل مشترياتها واستهلاكها حسب التحليل.</p></div></div>
+
+{% if user.role == 'admin' %}
+<div class="content-grid two-col inventory-forms">
+  <section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">تعريف المستلزمات</p><h2>عنصر مخزون جديد</h2></div></div>
+    <form method="post" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add_item">
+      <label>اسم العنصر <span class="required">*</span><input name="name" required maxlength="120" placeholder="مثال: أنبوب سحب دم"></label>
+      <label>وحدة القياس <span class="required">*</span><input name="unit" required maxlength="32" placeholder="قطعة، مل، اختبار"></label>
+      <label class="span-two">حد تنبيه إعادة الطلب<input name="reorder_level" type="number" step="0.001" min="0" value="0" required><small class="muted">يظهر تنبيه عندما يصل الرصيد إلى هذا الحد أو يقل عنه.</small></label>
+      <button class="button primary span-two" type="submit">إضافة عنصر</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">توريد جديد</p><h2>تسجيل شراء</h2></div></div>
+    {% if items %}
+    <form method="post" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="purchase">
+      <label class="span-two">عنصر المخزون <span class="required">*</span><select name="item_id" required><option value="">اختر العنصر</option>{% for item in items %}<option value="{{ item.id }}">{{ item.name }} · {{ item.unit }}</option>{% endfor %}</select></label>
+      <label>الكمية المشتراة <span class="required">*</span><input name="quantity" type="number" step="0.001" min="0.001" required></label>
+      <label>تكلفة الوحدة (ج.م)<input name="unit_cost" type="number" step="0.01" min="0" value="0" required></label>
+      <label>المورد<input name="supplier" maxlength="120"></label>
+      <label>رقم الفاتورة / المرجع<input name="reference" maxlength="80"></label>
+      <button class="button primary span-two" type="submit">حفظ عملية الشراء</button>
+    </form>
+    {% else %}<div class="empty-state compact"><p>أضف عنصر مخزون قبل تسجيل المشتريات.</p></div>{% endif %}
+  </section>
+
+  <section class="panel inventory-recipe-panel">
+    <div class="panel-heading"><div><p class="eyebrow">الاستهلاك لكل تحليل</p><h2>إعداد كميات الاستخدام</h2></div></div>
+    {% if items and tests %}
+    <form method="post" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="set_recipe">
+      <label>التحليل <span class="required">*</span><select name="test_id" required><option value="">اختر التحليل</option>{% for test in tests %}<option value="{{ test.id }}">{{ test.name }}</option>{% endfor %}</select></label>
+      <label>عنصر المخزون <span class="required">*</span><select name="item_id" required><option value="">اختر العنصر</option>{% for item in items %}<option value="{{ item.id }}">{{ item.name }} · {{ item.unit }}</option>{% endfor %}</select></label>
+      <label>الكمية المستخدمة لكل تحليل <span class="required">*</span><input name="quantity" type="number" step="0.001" min="0.001" required></label>
+      <button class="button primary" type="submit">حفظ الاستخدام</button>
+    </form>
+    {% else %}<div class="empty-state compact"><p>أضف عناصر مخزون وتحاليل نشطة لإعداد الاستهلاك.</p></div>{% endif %}
+  </section>
+
+  <section class="panel inventory-recipe-panel">
+    <div class="panel-heading"><div><p class="eyebrow">الوصفات المسجلة</p><h2>استهلاك التحاليل</h2></div></div>
+    {% set recipes_exist = tests|selectattr('inventory_recipe')|list %}
+    {% if recipes_exist %}
+    <div class="table-wrap"><table><thead><tr><th>التحليل</th><th>العنصر</th><th>الكمية لكل تحليل</th><th></th></tr></thead><tbody>
+      {% for test in tests %}{% for recipe in test.inventory_recipe %}
+      <tr><td><b>{{ test.name }}</b></td><td>{{ recipe.item_name }}</td><td>{{ recipe.quantity }} {{ recipe.unit }}</td><td><form method="post" action="{{ url_for('main.inventory') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="remove_recipe"><input type="hidden" name="test_id" value="{{ test.id }}"><input type="hidden" name="item_id" value="{{ recipe.item_id }}"><button class="button tiny secondary" type="submit">حذف</button></form></td></tr>
+      {% endfor %}{% endfor %}
+    </tbody></table></div>
+    {% else %}<div class="empty-state compact"><p>لم يتم إعداد كميات استهلاك لأي تحليل.</p></div>{% endif %}
+  </section>
+</div>
+{% endif %}
+
+<section class="panel inventory-balance-panel">
+  <div class="panel-heading"><div><p class="eyebrow">الرصيد الحالي</p><h2>عناصر المخزون <span class="count">{{ items|length }}</span></h2></div></div>
+  {% if items %}
+  <div class="table-wrap"><table><thead><tr><th>العنصر</th><th>الوحدة</th><th>الرصيد</th><th>حد التنبيه</th><th>الحالة</th></tr></thead><tbody>
+    {% for item in items %}<tr><td><b>{{ item.name }}</b></td><td>{{ item.unit }}</td><td>{{ item.balance }}</td><td>{{ item.reorder_level }}</td><td>{% if item.low_stock %}<span class="badge inventory-low">منخفض / نفد</span>{% else %}<span class="badge badge-green">متوفر</span>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state compact"><div class="empty-icon">▦</div><h3>لا توجد عناصر مخزون</h3><p>يمكن لمدير النظام إضافة المستلزمات التي تريد تتبعها.</p></div>{% endif %}
+</section>
+
+<section class="panel inventory-transactions-panel">
+  <div class="panel-heading"><div><p class="eyebrow">سجل الحركة</p><h2>المشتريات والاستهلاك <span class="count">{{ transactions|length }}</span></h2></div></div>
+  {% if transactions %}
+  <div class="table-wrap"><table><thead><tr><th>التاريخ (UTC)</th><th>نوع الحركة</th><th>العنصر</th><th>الكمية</th><th>التفاصيل</th></tr></thead><tbody>
+    {% for transaction in transactions %}<tr><td>{{ transaction.at[:16].replace('T',' ') }}</td><td>{% if transaction.transaction_type == 'purchase' %}<span class="badge badge-green">شراء</span>{% else %}<span class="badge">استهلاك</span>{% endif %}</td><td>{{ transaction.item_name }}</td><td>{% if transaction.transaction_type == 'consumption' %}−{% else %}+{% endif %}{{ transaction.quantity }} {{ transaction.unit }}</td><td>{% if transaction.transaction_type == 'purchase' %}{{ transaction.supplier or "—" }}{% if transaction.reference %} · {{ transaction.reference }}{% endif %}{% else %}{{ transaction.test_name }} · {{ transaction.order_number }}{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state compact"><p>ستظهر هنا عمليات الشراء واستهلاك التحاليل عند تسجيلها.</p></div>{% endif %}
+</section>
+{% endblock %}

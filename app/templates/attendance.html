@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}الحضور والرواتب{% endblock %}
+{% block breadcrumb %}الحضور والرواتب{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">دوام الموظفين</p><h1>الحضور والرواتب</h1><p class="muted">يسجل النظام وقت الدخول والخروج، ويوقف احتساب الوقت عند الخمول.</p></div></div>
+<div class="notice attendance-notice">يُحسب الأجر من وقت الجلسات النشطة المسجلة × الأجر بالساعة. التأخير بعد فترة السماح يُخصم بمعدل الأجر بالساعة، والعذر المعتمد يلغي خصم التأخير فقط ولا يضيف ساعات غير مسجلة. قد يختلف التقدير عن الرواتب الرسمية؛ راجع القوانين وسياسات العمل المحلية قبل الاعتماد.</div>
+
+{% if user.role == 'admin' %}
+<section class="panel attendance-settings-panel">
+  <div class="panel-heading"><div><p class="eyebrow">إعدادات النظام</p><h2>الخمول والتأخير</h2></div></div>
+  <form method="post" class="form-grid attendance-settings-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="settings">
+    <label>مدة الخمول قبل إيقاف احتساب الوقت (دقيقة)<input name="idle_timeout_minutes" type="number" min="1" max="240" value="{{ settings.idle_timeout_minutes }}" required></label>
+    <label>فترة السماح للتأخير (دقيقة)<input name="late_grace_minutes" type="number" min="0" max="240" value="{{ settings.late_grace_minutes }}" required></label>
+    <button class="button primary span-two" type="submit">حفظ الإعدادات</button>
+  </form>
+</section>
+
+<section class="panel employee-config-panel">
+  <div class="panel-heading"><div><p class="eyebrow">تفعيل التتبع</p><h2>ملف الموظف وجدول الدوام</h2></div></div>
+  {% if employees %}
+  <form method="post" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="configure_employee">
+    <label class="span-two">حساب المستخدم <span class="required">*</span><select name="user_id" required><option value="">اختر الموظف</option>{% for employee in employees %}<option value="{{ employee.id }}">{{ employee.username }} · {{ role_labels.get(employee.role, employee.role) }}</option>{% endfor %}</select></label>
+    <label>الأجر بالساعة (ج.م) <span class="required">*</span><input name="hourly_rate" type="number" step="0.01" min="0" required></label>
+    <label>ساعات الوردية <span class="required">*</span><input name="hours_per_shift" type="number" step="0.25" min="0.25" max="24" required></label>
+    <label>بداية الوردية <span class="required">*</span><input name="shift_start" type="time" required></label>
+    <label>نهاية الوردية <span class="required">*</span><input name="shift_end" type="time" required></label>
+    <label>بداية تطبيق الجدول <span class="required">*</span><input name="start_date" type="date" required></label>
+    <label>نهاية تطبيق الجدول <small class="muted">اختياري للجدول المستمر</small><input name="end_date" type="date"></label>
+    <fieldset class="span-two weekday-picker"><legend>أيام العمل الأسبوعية <span class="required">*</span> · الأيام غير المحددة عطلة</legend><div class="weekday-options">{% for day, label in weekdays.items() %}<label><input type="checkbox" name="weekdays" value="{{ day }}"><span>{{ label }}</span></label>{% endfor %}</div></fieldset>
+    <label class="span-two">معلومات إضافية<input name="extra_info" maxlength="500" placeholder="مسمى وظيفي، ملاحظات الدوام، أو تفاصيل أخرى"></label>
+    <button class="button primary span-two" type="submit">تفعيل / تحديث الموظف والجدول</button>
+  </form>
+  {% else %}<div class="empty-state compact"><p>أنشئ حساب مستخدم غير إداري قبل تفعيل ملف حضوره.</p></div>{% endif %}
+</section>
+
+<section class="panel employee-profiles-panel">
+  <div class="panel-heading"><div><p class="eyebrow">الموظفون المفعّلون</p><h2>ملفات الحضور <span class="count">{{ profiles|length }}</span></h2></div></div>
+  {% if profiles %}
+  <div class="table-wrap"><table><thead><tr><th>المستخدم</th><th>الأجر / ساعة</th><th>أيام الدوام</th><th>الورديات / أسبوع</th><th>ساعات الوردية</th><th>الفترة الحالية</th><th>معلومات إضافية</th><th>الإجراء</th></tr></thead><tbody>
+    {% for employee in profiles %}<tr><td><b>{{ employee.username }}</b>{% if not employee.enabled %}<small class="block muted">التتبع متوقف</small>{% endif %}</td><td>{{ "%.2f"|format(employee.hourly_rate) }} ج.م</td><td>{% if employee.schedule %}{% for day in employee.schedule.weekdays %}{{ weekdays[day] }}{% if not loop.last %}، {% endif %}{% endfor %}{% else %}—{% endif %}</td><td>{{ employee.schedule.weekdays|length if employee.schedule else "—" }}</td><td>{% if employee.schedule %}{{ employee.schedule.hours_per_shift }} ساعة · {{ employee.schedule.shift_start }}–{{ employee.schedule.shift_end }}{% else %}—{% endif %}</td><td>{% if employee.schedule %}{{ employee.schedule.start_date }} — {{ employee.schedule.end_date or "مستمر" }}{% else %}—{% endif %}</td><td>{{ employee.extra_info or "—" }}</td><td>{% if employee.enabled %}<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="disable_employee"><input type="hidden" name="user_id" value="{{ employee.user_id }}"><button class="button tiny secondary" type="submit">إيقاف التتبع</button></form>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state compact"><p>لم يتم تفعيل أي ملف حضور بعد.</p></div>{% endif %}
+</section>
+
+<section class="panel payroll-panel">
+  <div class="panel-heading"><div><p class="eyebrow">إقفال الشهر</p><h2>ملخص الرواتب</h2></div></div>
+  <form method="get" class="payroll-period-form">
+    <label>السنة<input name="year" type="number" min="2000" max="2100" value="{{ year }}" required></label>
+    <label>الشهر<select name="month">{% for month_number in range(1,13) %}<option value="{{ month_number }}" {% if month_number == month %}selected{% endif %}>{{ "%02d"|format(month_number) }}</option>{% endfor %}</select></label>
+    <button class="button secondary" type="submit">عرض الفترة</button>
+  </form>
+  {% if payroll %}
+  <div class="table-wrap"><table><thead><tr><th>الموظف</th><th>الورديات المجدولة</th><th>الساعات المجدولة</th><th>حضور</th><th>غياب</th><th>أعذار معتمدة</th><th>ساعات نشطة</th><th>الإجمالي</th><th>خصم تأخير</th><th>الصافي التقديري</th></tr></thead><tbody>
+    {% for row in payroll %}<tr><td><b>{{ row.user.username }}</b></td><td>{{ row.scheduled_shifts }}</td><td>{{ "%.2f"|format(row.scheduled_hours) }}</td><td>{{ row.attended_shifts }}</td><td>{{ row.absent_shifts }}</td><td>{{ row.excused_shifts }}</td><td>{{ "%.2f"|format(row.worked_hours) }}</td><td>{{ "%.2f"|format(row.gross_pay) }} ج.م</td><td>{{ "%.2f"|format(row.late_penalty) }} ج.م</td><td><b>{{ "%.2f"|format(row.net_pay) }} ج.م</b></td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state compact"><p>لا يوجد موظفون مفعّلون للحساب في هذه الفترة.</p></div>{% endif %}
+</section>
+
+<section class="panel attendance-sessions-panel">
+  <div class="panel-heading"><div><p class="eyebrow">تفاصيل الجلسات · {{ "%02d"|format(month) }}/{{ year }}</p><h2>سجل الدخول والخروج</h2></div></div>
+  {% if monthly_sessions %}
+  <div class="table-wrap"><table><thead><tr><th>الموظف</th><th>تاريخ الوردية</th><th>الدخول</th><th>الخروج</th><th>سبب الإغلاق</th><th>التأخير</th><th>أجر الساعة</th></tr></thead><tbody>
+    {% for record in monthly_sessions %}<tr><td>{{ record.username }}</td><td>{{ record.shift_date or "خارج الجدول" }}</td><td>{{ record.started_at[:16].replace('T',' ') }}</td><td>{{ record.ended_at[:16].replace('T',' ') if record.ended_at else "جلسة نشطة" }}</td><td>{{ "خمول" if record.close_reason == "idle" else "تسجيل خروج" if record.close_reason == "logout" else "نشطة" if record.active else "أخرى" }}</td><td>{{ record.late_minutes }} دقيقة</td><td>{{ "%.2f"|format(record.hourly_rate) }} ج.م</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state compact"><p>لا توجد جلسات مسجلة في هذه الفترة.</p></div>{% endif %}
+</section>
+
+<section class="panel excuse-review-panel">
+  <div class="panel-heading"><div><p class="eyebrow">مراجعة الطلبات</p><h2>الأعذار المعلقة <span class="count">{{ pending_excuses|length }}</span></h2></div></div>
+  {% if pending_excuses %}
+  <div class="table-wrap"><table><thead><tr><th>الموظف</th><th>تاريخ الوردية</th><th>السبب</th><th>الإجراء</th></tr></thead><tbody>
+    {% for excuse in pending_excuses %}<tr><td>{{ excuse.username }}</td><td>{{ excuse.shift_date }}</td><td>{{ excuse.reason }}</td><td><form method="post" class="excuse-review-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="excuse_id" value="{{ excuse.id }}"><input name="review_note" maxlength="500" placeholder="ملاحظة (اختيارية)"><button class="button tiny primary" name="action" value="approve_excuse" type="submit">اعتماد</button><button class="button tiny secondary" name="action" value="reject_excuse" type="submit">رفض</button></form></td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state compact"><p>لا توجد أعذار بانتظار المراجعة.</p></div>{% endif %}
+</section>
+{% endif %}
+
+{% if selected_payroll %}
+<section class="panel own-payroll-panel">
+  <div class="panel-heading"><div><p class="eyebrow">كشفك للفترة</p><h2>ملخص الدوام والراتب التقديري · {{ "%02d"|format(month) }}/{{ year }}</h2></div></div>
+  <div class="payroll-self-summary"><div><small>ساعات نشطة</small><b>{{ "%.2f"|format(selected_payroll.worked_hours) }}</b></div><div><small>الإجمالي</small><b>{{ "%.2f"|format(selected_payroll.gross_pay) }} ج.م</b></div><div><small>خصم التأخير</small><b>{{ "%.2f"|format(selected_payroll.late_penalty) }} ج.م</b></div><div><small>الصافي التقديري</small><b>{{ "%.2f"|format(selected_payroll.net_pay) }} ج.م</b></div></div>
+</section>
+{% endif %}
+
+{% if user.role != 'admin' %}
+<section class="panel excuse-submit-panel">
+  <div class="panel-heading"><div><p class="eyebrow">طلب مراجعة</p><h2>إرسال عذر</h2></div></div>
+  <form method="post" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="submit_excuse">
+    <label>تاريخ الوردية <span class="required">*</span><input name="shift_date" type="date" required></label>
+    <label>السبب <span class="required">*</span><input name="reason" maxlength="500" required></label>
+    <button class="button primary span-two" type="submit">إرسال للمدير</button>
+  </form>
+</section>
+<section class="panel own-attendance-panel">
+  <div class="panel-heading"><div><p class="eyebrow">سجل الجلسات</p><h2>أحدث جلسات الحضور</h2></div></div>
+  {% if own_sessions %}
+  <div class="table-wrap"><table><thead><tr><th>الدخول</th><th>الخروج</th><th>الحالة</th><th>تأخير</th><th>أجر الساعة</th></tr></thead><tbody>
+    {% for record in own_sessions %}<tr><td>{{ record.started_at[:16].replace('T',' ') }}</td><td>{{ record.ended_at[:16].replace('T',' ') if record.ended_at else "جلسة نشطة" }}</td><td>{{ "انتهاء بسبب الخمول" if record.close_reason == "idle" else "تسجيل خروج" if record.close_reason == "logout" else "نشطة" if record.active else "توقفت" }}</td><td>{{ record.late_minutes }} دقيقة</td><td>{{ "%.2f"|format(record.hourly_rate) }} ج.م</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state compact"><p>لا توجد جلسات حضور مسجلة.</p></div>{% endif %}
+</section>
+<section class="panel own-excuses-panel">
+  <div class="panel-heading"><div><p class="eyebrow">المتابعة</p><h2>أعذاري</h2></div></div>
+  {% if own_excuses %}
+  <div class="table-wrap"><table><thead><tr><th>تاريخ الوردية</th><th>السبب</th><th>الحالة</th><th>ملاحظة المدير</th></tr></thead><tbody>
+    {% for excuse in own_excuses %}<tr><td>{{ excuse.shift_date }}</td><td>{{ excuse.reason }}</td><td>{{ {"pending":"بانتظار المراجعة","approved":"معتمد","rejected":"مرفوض"}.get(excuse.status, excuse.status) }}</td><td>{{ excuse.review_note or "—" }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state compact"><p>لم ترسل أعذاراً.</p></div>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

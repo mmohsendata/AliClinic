@@ -15,6 +15,16 @@ EMPTY_STORE = {
     "orders": [],
     "samples": [],
     "results": [],
+    "inventory_items": [],
+    "inventory_transactions": [],
+    "attendance_settings": {
+        "idle_timeout_minutes": 10,
+        "late_grace_minutes": 5,
+    },
+    "attendance_profiles": [],
+    "attendance_schedules": [],
+    "attendance_sessions": [],
+    "attendance_excuses": [],
     "audit_logs": [],
 }
 
@@ -54,7 +64,10 @@ class JsonStore:
 
     def _read_unlocked(self) -> dict[str, Any]:
         if not self.path.exists():
-            return {key: list(value) for key, value in EMPTY_STORE.items()}
+            return {
+                key: value.copy() if isinstance(value, dict) else list(value)
+                for key, value in EMPTY_STORE.items()
+            }
         try:
             with self.path.open(encoding="utf-8") as source:
                 data = json.load(source)
@@ -63,7 +76,11 @@ class JsonStore:
         if not isinstance(data, dict):
             raise RuntimeError("Data store root must be a JSON object.")
         for key, default in EMPTY_STORE.items():
-            data.setdefault(key, list(default))
-            if not isinstance(data[key], list):
-                raise RuntimeError(f"Data store collection '{key}' must be an array.")
+            data.setdefault(key, default.copy() if isinstance(default, dict) else list(default))
+            expected_type = dict if isinstance(default, dict) else list
+            if not isinstance(data[key], expected_type):
+                raise RuntimeError(
+                    f"Data store collection '{key}' must be a "
+                    f"{'object' if expected_type is dict else 'array'}."
+                )
         return data

@@ -5,16 +5,23 @@
   <main class="report-sheet">
     <header class="report-header"><div class="brand"><span class="brand-mark">A</span><span><b>Absher</b><small>إدارة المختبر</small></span></div><div class="report-label">تقرير نتائج مختبرية</div></header>
     <h1>تقرير نتائج التحاليل</h1>
-    <div class="report-details"><div><span>المريض</span><b>{{ order.patient_name }}</b></div><div><span>رقم الطلب</span><b dir="ltr">{{ order.number }}</b></div><div><span>تاريخ الطلب</span><b dir="ltr">{{ order.created_at[:10] }}</b></div><div><span>حالة التقرير</span><b>معتمد</b></div></div>
-    <table><thead><tr><th>التحليل</th><th>النتيجة</th><th>الوحدة</th><th>النطاق المرجعي</th></tr></thead><tbody>
-      {% for item in order.test_items %}
-        {% set result = results|selectattr('test_id','equalto',item.test_id)|first %}
-        <tr><td>{{ item.name }}</td><td><b>{{ result.value if result else "—" }}</b></td><td>—</td><td>غير معتمد</td></tr>
+    <div class="report-details">
+      <div><span>المريض</span><b>{{ order.patient_name }}</b></div>
+      <div><span>رقم الطلب</span><b dir="ltr">{{ order.number }}</b></div>
+      {% if patient and patient.medical_record_number %}<div><span>رقم الملف</span><b dir="ltr">{{ patient.medical_record_number }}</b></div>{% endif %}
+      {% if patient and patient.date_of_birth %}<div><span>تاريخ الميلاد</span><b dir="ltr">{{ patient.date_of_birth }}</b></div>{% endif %}
+      <div><span>تاريخ الطلب</span><b dir="ltr">{{ order.created_at[:10] }}</b></div>
+      <div><span>حالة التقرير</span><b>معتمد</b></div>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>التحليل</th><th>القياس</th><th>النتيجة</th><th>الوحدة</th><th>النطاق / القيم التفسيرية</th><th>حالة المرجع</th></tr></thead><tbody>
+      {% for row in report_rows %}
+        <tr><td>{{ row.test_name }}</td><td>{{ row.component_name or "—" }}</td><td><b>{{ row.value }}</b></td><td>{{ row.unit or "—" }}</td><td>{{ row.reference_range or "غير مضبوط" }}</td><td>{% if row.reference_verified %}متحقق محلياً{% else %}مرجع غير معتمد محلياً{% endif %}</td></tr>
       {% endfor %}
-    </tbody></table>
+    </tbody></table></div>
     {% if order.is_demo %}<p class="report-warning">هذا تقرير تجريبي ببيانات غير حقيقية، وغير صالح للتشخيص أو للاستخدام السريري.</p>{% endif %}
-    <p class="report-warning">القيم المرجعية والوحدات غير مُدخلة أو معتمدة في هذا الإصدار. يجب مراجعة التقرير واعتماد بيانات التحاليل من المختص قبل استخدامه سريرياً.</p>
-    <footer class="report-footer"><span>تم إنشاء التقرير من النظام — {{ order.approved_at[:10] }}</span><span>رقم الإصدار: 1</span></footer>
+    {% if has_draft_references %}<p class="report-warning">لا توجد بيانات مرجعية معتمدة محلياً لبعض نتائج هذا التقرير. يجب على المختبر تحديد الوحدات والنطاقات المناسبة لطريقة القياس والسكان المحليين قبل أي استخدام سريري.</p>{% endif %}
+    {% if report_sources %}<section class="report-sources"><b>مصادر معلومات القوالب</b><ul>{% for source in report_sources %}<li>{{ source.name }} — <a href="{{ source.url }}" dir="ltr">{{ source.url }}</a></li>{% endfor %}</ul></section>{% endif %}
+    <footer class="report-footer"><span>تم إنشاء التقرير من النظام — {{ order.approved_at[:10] }}</span><span>رقم الإصدار: 2</span></footer>
     <button class="button primary no-print" onclick="window.print()">طباعة التقرير</button>
   </main>
 </body>

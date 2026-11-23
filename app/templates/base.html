@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b746b">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="attendance-active" content="{{ 'true' if attendance_enabled else 'false' }}">
   <title>{% block title %}Absher{% endblock %} | Absher</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
@@ -18,6 +20,8 @@
         <a href="{{ url_for('main.patients') }}" class="{% if request.endpoint == 'main.patients' %}active{% endif %}"><span>♙</span> المرضى</a>
         <a href="{{ url_for('main.catalog') }}" class="{% if request.endpoint == 'main.catalog' %}active{% endif %}"><span>⌕</span> كتالوج التحاليل</a>
         <a href="{{ url_for('main.orders') }}" class="{% if request.endpoint == 'main.orders' %}active{% endif %}"><span>▤</span> طلبات المختبر</a>
+        {% if user.role in ['admin','technician'] %}<a href="{{ url_for('main.inventory') }}" class="{% if request.endpoint == 'main.inventory' %}active{% endif %}"><span>▦</span> المخزون</a>{% endif %}
+        {% if attendance_enabled %}<a href="{{ url_for('main.attendance') }}" class="{% if request.endpoint == 'main.attendance' %}active{% endif %}"><span>◷</span> الحضور والرواتب</a>{% endif %}
         {% if user.role == 'admin' %}<a href="{{ url_for('main.users') }}" class="{% if request.endpoint == 'main.users' %}active{% endif %}"><span>♧</span> المستخدمون</a>{% endif %}
       </nav>
       <div class="sidebar-bottom"><span class="status-dot"></span><span>النظام يعمل محلياً</span></div>

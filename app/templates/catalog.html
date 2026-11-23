@@ -2,7 +2,13 @@
 {% block title %}كتالوج التحاليل{% endblock %}
 {% block breadcrumb %}كتالوج التحاليل{% endblock %}
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">الخدمات المخبرية</p><h1>كتالوج التحاليل</h1><p class="muted">إدارة أسماء التحاليل وأسعارها ونوع العينة.</p></div></div>
+<div class="page-heading"><div><p class="eyebrow">الخدمات المخبرية</p><h1>كتالوج التحاليل</h1><p class="muted">إدارة أسماء التحاليل وقوالب النتائج والنطاقات المرجعية.</p></div></div>
+{% if user.role == 'admin' %}
+<section class="panel template-import">
+  <div><h2>قوالب تحاليل شائعة</h2><p class="muted">استيراد مجموعة أولية من قوالب الدم والكيمياء والبول والهرمونات. القيم المرجعية معلومات عامة وليست معياراً مصرياً معتمداً؛ يلزم تحقق المختبر محلياً قبل إنشاء طلبات بهذه التحاليل.</p></div>
+  <form method="post" action="{{ url_for('main.starter_templates') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button secondary" type="submit">استيراد القوالب</button></form>
+</section>
+{% endif %}
 <div class="content-grid two-col">
   <section class="panel"><div class="panel-heading"><div><p class="eyebrow">إضافة خدمة</p><h2>تحليل جديد</h2></div></div>
     <form method="post" class="form-grid">
@@ -16,7 +22,31 @@
     </form>
   </section>
   <section class="panel"><div class="panel-heading"><div><p class="eyebrow">الخدمات المتاحة</p><h2>التحاليل <span class="count">{{ tests|length }}</span></h2></div></div>
-    {% if tests %}<div class="table-wrap"><table><thead><tr><th>الرمز</th><th>التحليل</th><th>العينة</th><th>السعر</th></tr></thead><tbody>{% for test in tests %}<tr><td class="code">{{ test.code }}</td><td><b>{{ test.name }}</b>{% if test.is_demo %}<span class="badge demo-badge">تجريبي</span>{% endif %}{% if test.english_name %}<small class="block muted">{{ test.english_name }}</small>{% endif %}</td><td>{{ test.sample_type or "—" }}</td><td>{{ "%.2f"|format(test.price) }} ج.م</td></tr>{% endfor %}</tbody></table></div>
+    {% if tests %}<div class="table-wrap"><table><thead><tr><th>الرمز</th><th>التحليل / القالب</th><th>العينة</th><th>السعر</th></tr></thead><tbody>{% for test in tests %}<tr>
+      <td class="code">{{ test.code }}</td>
+      <td><b>{{ test.name }}</b>{% if test.is_demo %}<span class="badge demo-badge">تجريبي</span>{% endif %}{% if test.english_name %}<small class="block muted">{{ test.english_name }}</small>{% endif %}
+        {% if test.result_template %}<small class="block muted">{{ test.result_template|length }} حقول نتائج · {% if test.reference_verified %}<span class="badge badge-green">متحقق محلياً</span>{% else %}<span class="badge template-draft">مسودة — يلزم التحقق</span>{% endif %}</small>{% endif %}
+        {% if user.role == 'admin' %}
+        <details class="template-editor"><summary>إعداد قالب النتائج</summary>
+          <form method="post" action="{{ url_for('main.catalog_template', test_id=test.id) }}" class="template-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>مصدر النطاقات المرجعية<input name="reference_source_url" type="url" dir="ltr" value="{{ test.reference_source_url or '' }}" placeholder="https://..." maxlength="500">{% if test.reference_source_url %}<a href="{{ test.reference_source_url }}" target="_blank" rel="noopener noreferrer" dir="ltr">فتح المصدر</a>{% endif %}</label>
+            <div class="template-fields"><div class="template-field-head"><span>الحقل</span><span>الوحدة</span><span>النطاق / القيم التفسيرية</span><span></span></div>
+              {% for component in test.result_template or [{}] %}
+              <div class="template-field-row">
+                <input name="component_name" aria-label="اسم حقل النتيجة" value="{{ component.name or '' }}" placeholder="اسم الحقل" maxlength="120">
+                <input name="component_unit" aria-label="وحدة حقل النتيجة" value="{{ component.unit or '' }}" placeholder="الوحدة" maxlength="32">
+                <input name="component_range" aria-label="النطاق المرجعي" value="{{ component.reference_range or '' }}" placeholder="النطاق المرجعي (فارغ إذا غير معروف)" maxlength="160">
+                <button type="button" class="button tiny secondary template-remove-field">حذف</button>
+              </div>
+              {% endfor %}
+            </div>
+            <button type="button" class="button tiny secondary template-add-field">إضافة حقل</button>
+            <label class="template-verify"><input type="checkbox" name="verify" value="yes" {% if test.reference_verified %}checked{% endif %}> أؤكد أن المختبر تحقق من الوحدات والنطاقات لهذا القالب</label>
+            <button class="button tiny primary" type="submit">حفظ القالب</button>
+          </form>
+        </details>{% endif %}
+      </td><td>{{ test.sample_type or "—" }}</td><td>{{ "%.2f"|format(test.price) }} ج.م</td></tr>{% endfor %}</tbody></table></div>
     {% else %}<div class="empty-state compact"><div class="empty-icon">⌕</div><h3>الكتالوج فارغ</h3><p>أضف التحاليل وأسعارها للبدء في تسجيل الطلبات.</p></div>{% endif %}
   </section>
 </div>
