@@ -3,13 +3,41 @@
 {% block breadcrumb %}كتالوج التحاليل{% endblock %}
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">الخدمات المخبرية</p><h1>كتالوج التحاليل</h1><p class="muted">إدارة أسماء التحاليل وقوالب النتائج والنطاقات المرجعية.</p></div></div>
-{% if user.role == 'admin' %}
+{% if user.role in ['admin','reviewer'] %}
 <section class="panel template-import">
-  <div><h2>قوالب تحاليل شائعة</h2><p class="muted">استيراد مجموعة أولية من قوالب الدم والكيمياء والبول والهرمونات. القيم المرجعية معلومات عامة وليست معياراً مصرياً معتمداً؛ يلزم تحقق المختبر محلياً قبل إنشاء طلبات بهذه التحاليل.</p></div>
-  <form method="post" action="{{ url_for('main.starter_templates') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button secondary" type="submit">استيراد القوالب</button></form>
+  <div><h2>قائمة التحاليل المعروفة</h2><p class="muted">راجع مكونات كل تحليل، وأدخل سعره قبل اعتماده وإضافته إلى الكتالوج. اعتماد التحليل لا يعني اعتماد نطاقاته المرجعية الطبية؛ تُراجع النطاقات بشكل منفصل.</p></div>
+  <span class="badge">{{ predefined_templates|rejectattr('already_added')|list|length }} بانتظار المراجعة</span>
 </section>
+<section class="panel predefined-tests-panel"><div class="predefined-test-list">
+  {% for template in predefined_templates %}
+  <details class="predefined-test-card">
+    <summary><span><b>{{ template.name }}</b><small>{{ template.code }} · {{ template.category }} · {{ template.result_template|length }} مكونات</small></span>
+      {% if template.already_added %}<span class="badge badge-green">مضاف للكتالوج</span>{% else %}<span class="badge template-draft">بانتظار المراجعة</span>{% endif %}
+    </summary>
+    {% if not template.already_added %}
+    <form method="post" action="{{ url_for('main.approve_catalog_template', code=template.code) }}" class="predefined-review-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="predefined-test-meta"><span>العينة: <b>{{ template.sample_type }}</b></span><a href="{{ template.reference_source_url }}" target="_blank" rel="noopener noreferrer" dir="ltr">مصدر معلومات التحليل ↗</a></div>
+      <label class="predefined-price">سعر التحليل (ج.م)<input name="price" type="number" step="0.01" min="0" required></label>
+      <div class="table-wrap"><table class="predefined-components"><thead><tr><th>مكون النتيجة</th><th>الوحدة</th><th>النطاق / القيم التفسيرية المحلية</th></tr></thead><tbody>
+        {% for component in template.result_template %}
+        <tr><td><input name="component_name" aria-label="اسم المكون" value="{{ component.name }}" maxlength="120" required></td>
+          <td><input name="component_unit" aria-label="وحدة المكون" value="{{ component.unit }}" maxlength="32"></td>
+          <td><input name="component_range" aria-label="النطاق المرجعي المحلي" value="{{ component.reference_range }}" maxlength="160" placeholder="راجع واضبط حسب مختبرك"></td></tr>
+        {% endfor %}
+      </tbody></table></div>
+      <p class="notice">القيم المنشورة أمثلة عامة وليست معياراً مصرياً. اترك المرجع فارغاً إذا لم تتحقق منه؛ سيظل واضحاً في التقرير أن المرجع المحلي غير معتمد.</p>
+      <label class="template-verify"><input type="checkbox" name="verify_references" value="yes"> تحققت محلياً من جميع النطاقات المدخلة وصلاحيتها لمختبري</label>
+      <label class="template-verify"><input type="checkbox" name="reviewed" value="yes" required> راجعت مكونات التحليل والعينة والسعر، وأوافق على إضافته إلى كتالوج المختبر.</label>
+      <button class="button primary" type="submit">اعتماد هذا التحليل وإضافته</button>
+    </form>
+    {% endif %}
+  </details>
+  {% endfor %}
+</div></section>
 {% endif %}
-<div class="content-grid two-col">
+<div class="content-grid {% if user.role in ['admin','receptionist'] %}two-col{% endif %}">
+  {% if user.role in ['admin','receptionist'] %}
   <section class="panel"><div class="panel-heading"><div><p class="eyebrow">إضافة خدمة</p><h2>تحليل جديد</h2></div></div>
     <form method="post" class="form-grid">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -21,11 +49,12 @@
       <button class="button primary span-two" type="submit">إضافة إلى الكتالوج <span>←</span></button>
     </form>
   </section>
+  {% endif %}
   <section class="panel"><div class="panel-heading"><div><p class="eyebrow">الخدمات المتاحة</p><h2>التحاليل <span class="count">{{ tests|length }}</span></h2></div></div>
     {% if tests %}<div class="table-wrap"><table><thead><tr><th>الرمز</th><th>التحليل / القالب</th><th>العينة</th><th>السعر</th></tr></thead><tbody>{% for test in tests %}<tr>
       <td class="code">{{ test.code }}</td>
       <td><b>{{ test.name }}</b>{% if test.is_demo %}<span class="badge demo-badge">تجريبي</span>{% endif %}{% if test.english_name %}<small class="block muted">{{ test.english_name }}</small>{% endif %}
-        {% if test.result_template %}<small class="block muted">{{ test.result_template|length }} حقول نتائج · {% if test.reference_verified %}<span class="badge badge-green">متحقق محلياً</span>{% else %}<span class="badge template-draft">مسودة — يلزم التحقق</span>{% endif %}</small>{% endif %}
+        {% if test.result_template %}<small class="block muted">{{ test.result_template|length }} حقول نتائج · {% if test.template_approved or test.reference_verified %}<span class="badge badge-green">القالب معتمد</span>{% else %}<span class="badge template-draft">بانتظار مراجعة القالب</span>{% endif %} {% if not test.reference_verified %}<span class="badge template-draft">النطاقات غير معتمدة</span>{% endif %}</small>{% endif %}
         {% if user.role == 'admin' %}
         <details class="template-editor"><summary>إعداد قالب النتائج</summary>
           <form method="post" action="{{ url_for('main.catalog_template', test_id=test.id) }}" class="template-form">
@@ -42,7 +71,8 @@
               {% endfor %}
             </div>
             <button type="button" class="button tiny secondary template-add-field">إضافة حقل</button>
-            <label class="template-verify"><input type="checkbox" name="verify" value="yes" {% if test.reference_verified %}checked{% endif %}> أؤكد أن المختبر تحقق من الوحدات والنطاقات لهذا القالب</label>
+            <label class="template-verify"><input type="checkbox" name="approve_template" value="yes" {% if test.template_approved or test.reference_verified %}checked{% endif %}> أوافق على مكونات قالب التحليل ليصبح متاحاً للطلبات</label>
+            <label class="template-verify"><input type="checkbox" name="verify" value="yes" {% if test.reference_verified %}checked{% endif %}> أؤكد التحقق المحلي من جميع النطاقات المرجعية</label>
             <button class="button tiny primary" type="submit">حفظ القالب</button>
           </form>
         </details>{% endif %}

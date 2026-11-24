@@ -8,7 +8,7 @@
   <form method="post" class="order-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>المريض<select name="patient_id" required><option value="">اختر المريض</option>{% for patient in patients %}<option value="{{ patient.id }}">{{ patient.name }} · {{ patient.medical_record_number }}</option>{% endfor %}</select></label>
-    <fieldset><legend>التحاليل المطلوبة <span class="required">*</span></legend><div class="test-select-grid">{% for test in tests %}<label class="check-card {% if test.result_template and not test.reference_verified %}check-card-disabled{% endif %}"><input type="checkbox" name="test_ids" value="{{ test.id }}" {% if test.result_template and not test.reference_verified %}disabled{% endif %}><span><b>{{ test.name }}</b><small>{{ "%.2f"|format(test.price) }} ج.م</small>{% if test.result_template and not test.reference_verified %}<small class="template-draft">يلزم التحقق من القالب أولاً</small>{% endif %}</span></label>{% else %}<p class="muted">أضف تحاليل نشطة من الكتالوج أولاً.</p>{% endfor %}</div></fieldset>
+    <fieldset><legend>التحاليل المطلوبة <span class="required">*</span></legend><div class="test-select-grid">{% for test in tests %}<label class="check-card {% if test.result_template and not test.template_approved and not test.reference_verified %}check-card-disabled{% endif %}"><input type="checkbox" name="test_ids" value="{{ test.id }}" {% if test.result_template and not test.template_approved and not test.reference_verified %}disabled{% endif %}><span><b>{{ test.name }}</b><small>{{ "%.2f"|format(test.price) }} ج.م</small>{% if test.result_template and not test.template_approved and not test.reference_verified %}<small class="template-draft">بانتظار اعتماد القالب</small>{% endif %}</span></label>{% else %}<p class="muted">أضف تحاليل نشطة من الكتالوج أولاً.</p>{% endfor %}</div></fieldset>
     <button class="button primary" type="submit">إنشاء الطلب والعينات <span>←</span></button>
   </form>
 </section>
@@ -37,7 +37,7 @@
               <span>{{ item.result_template|length }} نتائج جزئية · {{ result.status }}</span>
             {% else %}<span>النتيجة: <b>{{ result.value }}</b> · {{ result.status }}</span>{% endif %}
           {% else %}<span class="muted">لم تُدخل نتيجة</span>{% endif %}
-          {% if item.result_template and not item.reference_verified %}<small class="template-draft">القالب غير معتمد محلياً؛ لا يمكن طلب هذا التحليل حتى التحقق منه.</small>{% endif %}
+          {% if item.result_template and not item.reference_verified %}<small class="template-draft">النطاق المرجعي غير معتمد محلياً.</small>{% endif %}
         </div>
         {% if user.role in ['admin','technician'] and order.status not in ['معتمد','مكتمل','ملغي'] %}
         <form method="post" action="{{ url_for('main.result_entry', order_id=order.id) }}" class="inline-form result-form">

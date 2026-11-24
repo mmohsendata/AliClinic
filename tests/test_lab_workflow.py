@@ -20,12 +20,13 @@ from app.services.attendance import (
 from app.services.lab import (
     LabError,
     approve_order,
+    approve_predefined_template,
     create_inventory_item,
     create_order,
     create_patient,
     create_test,
     enter_result,
-    import_starter_templates,
+    get_predefined_templates,
     record_inventory_purchase,
     set_test_inventory_recipe,
     update_sample,
@@ -110,41 +111,71 @@ def test_cannot_approve_before_all_results_are_entered(app, actors):
         approve_order(store, order["id"], reviewer)
 
 
-def test_starter_lab_templates_are_imported_idempotently(app, actors):
+def test_predefined_tests_wait_for_explicit_review_and_approval(app, actors):
     store = app.extensions["json_store"]
-    admin, _ = actors
+    admin, reviewer = actors
 
-    added = import_starter_templates(store, admin)
-    assert len(added) >= 15
-    assert import_starter_templates(store, admin) == []
-    saved = store.read()["tests"]
-    cbc = next(test for test in saved if test["code"] == "CBC")
-    assert cbc["result_template"][0]["name"] == "كريات الدم الحمراء (RBC)"
-    assert cbc["reference_source_url"].startswith("https://")
-    assert cbc["reference_verified"] is False
+    predefined = get_predefined_templates()
+    assert len(predefined) >= 15
+    assert get_predefined_templates() == predefined
+    assert not store.read()["tests"]
     client = app.test_client()
     with client.session_transaction() as session:
         session["user_id"] = admin["id"]
     catalog_page = client.get("/catalog")
     orders_page = client.get("/orders")
     assert catalog_page.status_code == 200
-    assert "إعداد قالب النتائج" in catalog_page.get_data(as_text=True)
+    assert "قائمة التحاليل المعروفة" in catalog_page.get_data(as_text=True)
     assert orders_page.status_code == 200
-    assert "يلزم التحقق من القالب أولاً" in orders_page.get_data(as_text=True)
+    cbc_template = next(template for template in predefined if template["code"] == "CBC")
+    form_data = [("price", "250"), ("reviewed", "yes")]
+    for component in cbc_template["result_template"]:
+        form_data.extend(
+            [
+                ("component_name", component["name"]),
+                ("component_unit", component["unit"]),
+                (
+                    "component_range",
+                    component["reference_range"] or "نطاق أدخله المستخدم",
+                ),
+            ]
+        )
+    with client.session_transaction() as session:
+        session["user_id"] = reviewer["id"]
+    reviewer_catalog = client.get("/catalog")
+    assert reviewer_catalog.status_code == 200
+    assert "قائمة التحاليل المعروفة" in reviewer_catalog.get_data(as_text=True)
+    assert "تحليل جديد" not in reviewer_catalog.get_data(as_text=True)
+    response = client.post(
+        "/catalog/predefined/CBC/approve", data=MultiDict(form_data)
+    )
+    assert response.status_code == 302
+    cbc = next(test for test in store.read()["tests"] if test["code"] == "CBC")
+    assert cbc["result_template"][0]["name"] == "كريات الدم الحمراء (RBC)"
+    assert cbc["reference_source_url"].startswith("https://")
+    assert cbc["template_approved"] is True
+    assert cbc["reference_verified"] is False
+    assert cbc["price"] == 250
+    assert cbc["template_approved_by"] == reviewer["id"]
+    assert "مضاف للكتالوج" in client.get("/catalog").get_data(as_text=True)
+    client.post("/catalog/predefined/CBC/approve", data=MultiDict(form_data))
+    assert len([test for test in store.read()["tests"] if test["code"] == "CBC"]) == 1
 
 
 def test_structured_results_require_local_reference_verification_and_print(app, actors):
     store = app.extensions["json_store"]
     admin, reviewer = actors
-    import_starter_templates(store, admin)
-    cbc = next(test for test in store.read()["tests"] if test["code"] == "CBC")
+    cbc_template = next(
+        template for template in get_predefined_templates() if template["code"] == "CBC"
+    )
     patient = create_patient(store, {"name": "مريض القالب", "phone": "01555555555"}, admin)
 
     template_form = [
-        ("reference_source_url", cbc["reference_source_url"]),
+        ("reference_source_url", cbc_template["reference_source_url"]),
+        ("approve_template", "yes"),
         ("verify", "yes"),
     ]
-    for component in cbc["result_template"]:
+    for component in cbc_template["result_template"]:
         template_form.extend(
             [
                 ("component_name", component["name"]),
@@ -155,9 +186,22 @@ def test_structured_results_require_local_reference_verification_and_print(app, 
                 ),
             ]
         )
-    saved_template = update_test_template(
-        store, cbc["id"], MultiDict(template_form), admin
+    predefined_form = [("price", "250"), ("reviewed", "yes")]
+    for component in cbc_template["result_template"]:
+        predefined_form.extend(
+            [
+                ("component_name", component["name"]),
+                ("component_unit", component["unit"] or "نص"),
+                (
+                    "component_range",
+                    component["reference_range"] or "نطاق محلي معتمد",
+                ),
+            ]
+        )
+    cbc = approve_predefined_template(
+        store, "CBC", MultiDict(predefined_form), admin
     )
+    saved_template = update_test_template(store, cbc["id"], MultiDict(template_form), admin)
     assert saved_template["reference_verified"] is True
 
     order = create_order(store, patient["id"], [cbc["id"]], admin)
@@ -194,14 +238,23 @@ def test_structured_results_require_local_reference_verification_and_print(app, 
     assert cbc["reference_source_url"] in report
 
 
-def test_unverified_reference_template_cannot_be_ordered(app, actors):
+def test_unapproved_template_cannot_be_ordered(app, actors):
     store = app.extensions["json_store"]
     admin, _ = actors
-    import_starter_templates(store, admin)
-    glucose = next(test for test in store.read()["tests"] if test["code"] == "GLU-F")
+    glucose = next(
+        template for template in get_predefined_templates() if template["code"] == "GLU-F"
+    )
     patient = create_patient(store, {"name": "مريض", "phone": "01666666666"}, admin)
-    with pytest.raises(LabError, match="قبل إنشاء الطلب"):
-        create_order(store, patient["id"], [glucose["id"]], admin)
+    draft = {
+        **glucose,
+        "id": "draft-glucose",
+        "price": 0,
+        "active": True,
+        "template_approved": False,
+    }
+    store.update(lambda data: data["tests"].append(draft))
+    with pytest.raises(LabError, match="مراجعة قالب النتائج"):
+        create_order(store, patient["id"], [draft["id"]], admin)
     assert not store.read()["orders"]
 
 

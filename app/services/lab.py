@@ -88,28 +88,80 @@ def create_test(store, values, actor):
     return store.update(create)
 
 
-def import_starter_templates(store, actor):
-    def import_templates(data):
-        existing_codes = {test["code"] for test in data["tests"]}
-        added = []
-        for template in STARTER_TEMPLATES:
-            if template["code"] in existing_codes:
-                continue
-            test = {
-                "id": str(uuid4()),
-                "price": 0.0,
-                "active": True,
-                "reference_verified": False,
-                "inventory_recipe": [],
-                **deepcopy(template),
-            }
-            data["tests"].append(test)
-            existing_codes.add(test["code"])
-            added.append(test)
-            audit(data, actor, "test.template_imported", test["id"])
-        return added
+def get_predefined_templates():
+    return deepcopy(STARTER_TEMPLATES)
 
-    return store.update(import_templates)
+
+def approve_predefined_template(store, code, values, actor):
+    template = next((item for item in STARTER_TEMPLATES if item["code"] == code), None)
+    if template is None:
+        raise LabError("قالب التحليل المحدد غير موجود.")
+    if values.get("reviewed") != "yes":
+        raise LabError("أكد مراجعة مكونات التحليل قبل اعتماده.")
+    price = parse_price(values.get("price", ""))
+    if price < 0:
+        raise LabError("السعر لا يمكن أن يكون سالباً.")
+
+    names = values.getlist("component_name")
+    units = values.getlist("component_unit")
+    ranges = values.getlist("component_range")
+    if not (
+        len(names) == len(units) == len(ranges) == len(template["result_template"])
+    ):
+        raise LabError("حقول القالب لا تطابق مكونات التحليل المحدد.")
+
+    components = []
+    for definition, name, unit, reference_range in zip(
+        template["result_template"], names, units, ranges
+    ):
+        name, unit, reference_range = name.strip(), unit.strip(), reference_range.strip()
+        if not name or len(name) > 120 or len(unit) > 32 or len(reference_range) > 160:
+            raise LabError("تحقق من أسماء الحقول والوحدات والنطاقات المرجعية.")
+        components.append(
+            {
+                "id": definition["id"],
+                "name": name,
+                "unit": unit,
+                "reference_range": reference_range,
+            }
+        )
+
+    verified = values.get("verify_references") == "yes"
+    if verified and (
+        not template["reference_source_url"]
+        or any(not component["reference_range"] for component in components)
+    ):
+        raise LabError("لا يمكن اعتماد النطاقات محلياً قبل إدخال نطاق لكل مكون.")
+
+    def approve(data):
+        if any(test["code"] == code for test in data["tests"]):
+            raise LabError("هذا التحليل موجود بالفعل في الكتالوج.")
+        test = {
+            "id": str(uuid4()),
+            "code": template["code"],
+            "name": template["name"],
+            "english_name": template["english_name"],
+            "category": template["category"],
+            "price": price,
+            "sample_type": template["sample_type"],
+            "active": True,
+            "reference_range": "",
+            "result_template": components,
+            "reference_source_url": template["reference_source_url"],
+            "reference_verified": verified,
+            "template_approved": True,
+            "template_approved_by": actor["id"],
+            "template_approved_at": now_iso(),
+            "inventory_recipe": [],
+        }
+        if verified:
+            test["reference_verified_by"] = actor["id"]
+            test["reference_verified_at"] = now_iso()
+        data["tests"].append(test)
+        audit(data, actor, "test.predefined_template_approved", test["id"])
+        return test
+
+    return store.update(approve)
 
 
 def update_test_template(store, test_id, values, actor):
@@ -151,25 +203,36 @@ def update_test_template(store, test_id, values, actor):
     )
     if source_url and (len(source_url) > 500 or not valid_source):
         raise LabError("رابط المصدر يجب أن يبدأ بـ https:// وألا يتجاوز 500 حرف.")
+    approved = values.get("approve_template") == "yes"
     verified = values.get("verify") == "yes"
+    if approved and not components:
+        raise LabError("أضف مكوناً واحداً على الأقل قبل اعتماد القالب.")
     if verified and (
         not components
         or not source_url
         or any(not component["reference_range"] for component in components)
     ):
-        raise LabError("لا يمكن اعتماد القالب قبل إدخال المصدر والنطاق المرجعي لكل حقل.")
+        raise LabError("لا يمكن تأكيد النطاقات قبل إدخال المصدر والنطاق المرجعي لكل حقل.")
 
     def save(data):
         test = find(data["tests"], test_id, "التحليل")
         test["result_template"] = components
         test["reference_source_url"] = source_url
         test["reference_verified"] = verified
+        test["template_approved"] = approved
         if verified:
             test["reference_verified_by"] = actor["id"]
             test["reference_verified_at"] = now_iso()
         else:
             test.pop("reference_verified_by", None)
             test.pop("reference_verified_at", None)
+        if approved:
+            test.pop("template_approved_by", None)
+            test["template_approved_by"] = actor["id"]
+            test["template_approved_at"] = now_iso()
+        else:
+            test.pop("template_approved_by", None)
+            test.pop("template_approved_at", None)
         audit(data, actor, "test.template_updated", test_id)
         return test
 
@@ -184,8 +247,8 @@ def create_order(store, patient_id, test_ids, actor):
         tests = [test for test in tests if test["active"]]
         if not tests:
             raise LabError("اختر تحليلاً نشطاً واحداً على الأقل.")
-        if any(test.get("result_template") and not test.get("reference_verified") for test in tests):
-            raise LabError("يجب اعتماد قالب النتائج ونطاقاته محلياً قبل إنشاء الطلب.")
+        if any(test.get("result_template") and not test.get("template_approved", test.get("reference_verified")) for test in tests):
+            raise LabError("يجب مراجعة قالب النتائج واعتماده قبل إنشاء الطلب.")
         order = {
             "id": str(uuid4()),
             "number": f"LAB-{datetime.now().strftime('%Y%m%d')}-{uuid4().hex[:5].upper()}",
@@ -199,6 +262,9 @@ def create_order(store, patient_id, test_ids, actor):
                     "result_template": deepcopy(test.get("result_template", [])),
                     "reference_source_url": test.get("reference_source_url", ""),
                     "reference_verified": bool(test.get("reference_verified")),
+                    "template_approved": bool(
+                        test.get("template_approved", test.get("reference_verified"))
+                    ),
                     "inventory_recipe": [
                         {
                             "item_id": recipe["item_id"],
@@ -480,8 +546,8 @@ def approve_order(store, order_id, actor):
         if len(matching) != len(order["test_items"]):
             raise LabError("لا يمكن اعتماد الطلب قبل إدخال جميع النتائج.")
         for item in order["test_items"]:
-            if item.get("result_template") and not item.get("reference_verified"):
-                raise LabError("يجب اعتماد الوحدات والنطاقات المرجعية محلياً قبل اعتماد النتائج.")
+            if item.get("result_template") and not item.get("template_approved"):
+                raise LabError("يجب مراجعة قالب النتائج واعتماده قبل اعتماد النتائج.")
             result = next(
                 (record for record in matching if record["test_id"] == item["test_id"]), None
             )

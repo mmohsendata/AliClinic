@@ -31,12 +31,13 @@ from app.services.attendance import (
 from app.services.lab import (
     LabError,
     approve_order,
+    approve_predefined_template,
     create_inventory_item,
     create_order,
     create_patient,
     create_test,
     enter_result,
-    import_starter_templates,
+    get_predefined_templates,
     now_iso,
     record_inventory_purchase,
     remove_test_inventory_recipe,
@@ -341,36 +342,52 @@ def patients():
 
 
 @bp.get("/catalog")
+@roles_required("admin", "receptionist", "reviewer")
+def catalog():
+    data = store().read()
+    existing_codes = {test["code"] for test in data["tests"]}
+    predefined_templates = [
+        {**template, "already_added": template["code"] in existing_codes}
+        for template in get_predefined_templates()
+    ]
+    return render_template(
+        "catalog.html", tests=data["tests"], predefined_templates=predefined_templates
+    )
+
+
 @bp.post("/catalog")
 @roles_required("admin", "receptionist")
-def catalog():
-    if request.method == "POST":
-        try:
-            create_test(store(), request.form, current_user())
-            flash("تمت إضافة التحليل.", "success")
-            return redirect(url_for("main.catalog"))
-        except LabError as exc:
-            flash(str(exc), "error")
-    data = store().read()
-    return render_template("catalog.html", tests=data["tests"])
+def catalog_create():
+    try:
+        create_test(store(), request.form, current_user())
+        flash("تمت إضافة التحليل.", "success")
+    except LabError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.catalog"))
 
 
 @bp.post("/catalog/<test_id>/template")
 @roles_required("admin")
 def catalog_template(test_id):
     try:
-        update_test_template(store(), test_id, request.form, current_user())
-        flash("تم حفظ قالب النتائج. يجب التحقق المحلي قبل الاعتماد.", "success")
+        test = update_test_template(store(), test_id, request.form, current_user())
+        if test["template_approved"]:
+            flash("تم حفظ قالب النتائج واعتماده للطلبات.", "success")
+        else:
+            flash("تم حفظ القالب؛ ما زال بانتظار المراجعة والاعتماد.", "success")
     except LabError as exc:
         flash(str(exc), "error")
     return redirect(url_for("main.catalog"))
 
 
-@bp.post("/catalog/starter-templates")
-@roles_required("admin")
-def starter_templates():
-    added = import_starter_templates(store(), current_user())
-    flash(f"تمت إضافة {len(added)} قالباً جديداً. راجع النطاقات قبل الاستخدام.", "success")
+@bp.post("/catalog/predefined/<code>/approve")
+@roles_required("admin", "reviewer")
+def approve_catalog_template(code):
+    try:
+        test = approve_predefined_template(store(), code, request.form, current_user())
+        flash(f"تمت مراجعة التحليل {test['name']} واعتماده في الكتالوج.", "success")
+    except LabError as exc:
+        flash(str(exc), "error")
     return redirect(url_for("main.catalog"))
 
 
